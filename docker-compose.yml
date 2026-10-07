@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: emergency-broadcast-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-broadcast}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-broadcast}
+      POSTGRES_DB: ${POSTGRES_DB:-broadcast}
+    ports:
+      # 宿主机 5432 可能被占用；改成仅在需要时映射，默认映射便于本地排查
+      - "${POSTGRES_PORT_PUBLISH:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-broadcast} -d ${POSTGRES_DB:-broadcast}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: emergency-broadcast-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-broadcast}:${POSTGRES_PASSWORD:-broadcast}@db:5432/${POSTGRES_DB:-broadcast}
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8080"
+      MAX_SECONDS: ${MAX_SECONDS:-315360000}
+    ports:
+      - "${APP_PORT_PUBLISH:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
